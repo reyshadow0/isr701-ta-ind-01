@@ -1,0 +1,142 @@
+\documentclass[11pt,a4paper]{article}
+
+% Datos de la actividad
+\newcommand{\codigoactividad}{TA-IND-01}
+\newcommand{\nombreactividad}{Informe académico individual: análisis crítico de un sistema distribuido real}
+\newcommand{\integrantes}{Castro Coello Mario Sebastián}
+\newcommand{\repositorio}{https://github.com/reyshadow0/isr701-ta-ind-01}
+\newcommand{\fechaentrega}{11 de noviembre de 2026}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla,es-nodecimaldot]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{csquotes}
+\usepackage[backend=biber,style=ieee]{biblatex}
+\addbibresource{referencias.bib}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figuras/}{capturas/}}
+
+% Permite cortar URL largas en la bibliografía (evita desbordes)
+\setcounter{biburlnumpenalty}{100}
+\setcounter{biburlucpenalty}{100}
+\setcounter{biburllcpenalty}{100}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  showstringspaces=false,
+  extendedchars=true,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+           {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+           {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1 {¿}{{?`}}1 {¡}{{!`}}1
+}
+\renewcommand{\lstlistingname}{Código}
+
+\hypersetup{pdftitle={\codigoactividad: \nombreactividad}}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  {\large\bfseries UNIVERSIDAD TÉCNICA ESTATAL DE QUEVEDO\par}
+  \vspace{0.3cm}
+  {Facultad de Ciencias de la Computación\par}
+  {Carrera de Software\par}
+  \vspace{2.5cm}
+  {\large Aplicaciones Distribuidas (ISR-701)\par}
+  \vspace{1.5cm}
+  {\Large\bfseries \codigoactividad\par}
+  \vspace{0.4cm}
+  {\LARGE \nombreactividad\par}
+  \vfill
+  \begin{tabular}{@{}rl@{}}
+    \textbf{Estudiante:}       & \begin{tabular}[t]{@{}l@{}}\integrantes\end{tabular} \\[2pt]
+    \textbf{Docente:}          & Gleiston Cicerón Guerrero Ulloa, PhD \\
+    \textbf{Nivel / paralelo:} & Séptimo nivel / B \\
+    \textbf{Periodo:}          & SPA 2026--2027 \\
+    \textbf{Fecha:}            & \fechaentrega \\
+  \end{tabular}
+  \par\vspace{1cm}
+  {\small Repositorio: \url{\repositorio}\par}
+\end{titlepage}
+
+\section*{Resumen}
+% Entre 150 y 200 palabras.
+
+\newpage
+\tableofcontents
+\newpage
+
+% Mínimo 5 páginas de contenido (sin carátula, anexos ni referencias).
+
+\section{Introducción}
+
+\section{Arquitectura del sistema}
+% Diagrama propio (draw.io o TikZ) y su evolución desde el esquema a mano (Anexo A).
+
+\section{Análisis con los conceptos de la Unidad 1}
+
+\subsection{Transparencias de distribución}
+% Acceso, ubicación, migración, reubicación, replicación, concurrencia y fallos.
+
+\subsection{CAP y PACELC}
+
+\subsection{Modelos de comunicación}
+
+\subsection{Tolerancia a fallos}
+% Al menos un incidente real documentado, si existe.
+
+\section{Experimentación propia}
+% Comandos, salida e interpretación; los archivos completos en experimento/.
+
+\section{Ejemplos del entorno del estudiante}
+% Al menos 2 sistemas que uso de primera mano, cada uno ligado a un concepto.
+
+\section{Análisis comparativo}
+% Tabla de al menos 5 criterios y discusión.
+
+\section{Postura crítica}
+% Fortalezas, limitaciones, trade-offs y cuándo no conviene.
+
+\section{Conclusiones}
+
+\section{Declaración de uso de inteligencia artificial}
+
+\begin{table}[H]
+  \centering
+  \caption{Herramientas de inteligencia artificial usadas como apoyo}
+  \label{tab:declaracion-ia}
+  \begin{tabularx}{\textwidth}{@{}llXX@{}}
+    \toprule
+    \textbf{Herramienta} & \textbf{Versión} & \textbf{Para qué se usó} & \textbf{Cómo se verificó lo obtenido} \\
+    \midrule
+     & & & \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\printbibliography[heading=bibintoc,title={Referencias}]
+
+\clearpage
+\section*{Anexo A: Esquema inicial a mano}
+\addcontentsline{toc}{section}{Anexo A: Esquema inicial a mano}
+% Foto del esquema con nombre y fecha.
+
+\section*{Anexo B: Lectura de fuentes}
+\addcontentsline{toc}{section}{Anexo B: Lectura de fuentes}
+% Al menos 3 capturas de artículos citados, con fragmentos subrayados o anotados y la página.
+
+\end{document}
