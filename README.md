@@ -6,7 +6,7 @@ Aplicaciones Distribuidas (ISR-701) · Universidad Técnica Estatal de Quevedo �
 
 ## Video
 
-Enlace al video (3–5 min): _pendiente_
+Enlace al video (4 min 9 s, YouTube no listado): https://www.youtube.com/watch?v=DZC9qmeWG90
 
 ## Contenido del repositorio
 
