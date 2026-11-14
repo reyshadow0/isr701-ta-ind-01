@@ -29,7 +29,14 @@ Formato de cada entrada (copiar y llenar):
 
 ## 2026-11-13
 
-- **Qué hice:** Tomé las capturas de Discord web: la conexión WebSocket con la gateway y el envío de un mensaje por la API. Levanté en Docker un clúster de 3 nodos de ScyllaDB, creé la tabla de mensajes e hice el experimento de ONE contra QUORUM: latencia, un nodo caído, dos nodos caídos y recuperación. También busque y agregue referencias de Matrix.
+- **Qué hice:** Tomé las capturas de Discord web: la conexión WebSocket con la gateway y el envío de un mensaje por la API. Levanté en Docker un clúster de 3 nodos de ScyllaDB, creé la tabla de mensajes e hice el experimento de ONE contra QUORUM: latencia, un nodo caído, dos nodos caídos y recuperación. También busqué y agregué referencias de Matrix. En la noche le pedí a Claude un borrador de las secciones del informe con mis datos del experimento, y lo generó junto con un diagrama en TikZ.
 - **Problema:** En el experimento repetí un comando con la flecha ↑ y el estado con dos nodos caídos se guardó en el archivo 04, que era el de un nodo caído. Además, la latencia no quedó clara: con 3 corridas el promedio dice que ONE es más rápido y la mediana dice lo contrario.
 - **Solución:** Dejé en el archivo 04 el bloque porque es la salida real. Con la latencia vi que, con solo 3 corridas en la misma PC, la diferencia es tan pequeña que se pierde en el ruido.
 - **Tiempo:** 1 h 30 min (aprox.)
+
+## 2026-11-14
+
+- **Qué hice:** Revisé el borrador que Claude generó la noche anterior y corregí el párrafo que explica quién preparó el `docker-compose.yml`. Agregué las capturas de lectura de las fuentes en el Anexo B y la declaración de uso de inteligencia artificial. Cambié el diagrama en TikZ por uno propio hecho en draw.io. Grabé el video de 4 min 9 s y lo subí a YouTube como no listado.
+- **Problema:** El PDF tenía 3 desbordes de línea y la guía no permite ninguno. También vi que dos de mis fuentes son de 2017 y pueden bajar la nota en actualidad (D6). Además, el primer video que grabé no mostraba mi cara.
+- **Solución:** Corregí los desbordes con apoyo de Claude y volví a compilar sin avisos. Dejé las fuentes de 2017 porque sostienen la parte de la gateway y el incidente de los tombstones. Aun así tengo 8 fuentes de los últimos 5 años, y la guía pide 6. Regrabé el video y en el segundo sí se ve mi cara.
+- **Tiempo:** 1 h 40 min (aprox.)
