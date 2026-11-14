@@ -102,7 +102,7 @@ La Figura~\ref{fig:arquitectura} resume cómo está organizado Discord según su
 
 La primera es la gateway, que mantiene la conexión en tiempo real con los clientes. Cada usuario se conecta por WebSocket y el servidor crea un proceso de sesión para él \cite{Vishnevskiy2017elixir}. Cada servidor de Discord, al que el equipo técnico llama \emph{guild}, también es un proceso. Los dos tipos de proceso están escritos en Elixir y corren en la máquina virtual de Erlang. Cuando algo pasa en un guild, su proceso lo reenvía a todas las sesiones conectadas a él \cite{Vishnevskiy2017elixir}. En Discord web, el navegador abre esta conexión con \texttt{wss://gateway.discord.gg} y el servidor responde \texttt{101 Switching Protocols} (Figura~\ref{fig:captura-ws}).
 
-La segunda es la API. Los mensajes que uno escribe no salen por el WebSocket. Al enviar un mensaje, el navegador hace un \texttt{POST} por HTTPS a \texttt{discord.com/api/v9/channels/\{id\}/messages} y recibe \texttt{200 OK} (Figura~\ref{fig:captura-post}). Discord describe esta pieza como \enquote{our API monolith} \cite{Ingram2023}, pero no dice en qué lenguaje está escrita.
+La segunda es la API. Los mensajes que uno escribe no salen por el WebSocket. Al enviar un mensaje, el navegador hace un \texttt{POST} por HTTPS a \url{discord.com/api/v9/channels/{id}/messages} y recibe \texttt{200 OK} (Figura~\ref{fig:captura-post}). Discord describe esta pieza como \enquote{our API monolith} \cite{Ingram2023}, pero no dice en qué lenguaje está escrita.
 
 La tercera son los servicios de datos, escritos en Rust, que están entre la API y la base de datos. Tienen más o menos un endpoint gRPC por cada consulta a la base y no contienen lógica de negocio \cite{Ingram2023}. Su trabajo principal es juntar peticiones iguales: si muchos usuarios piden la misma fila al mismo tiempo, el servicio consulta la base una sola vez. Para lograrlo, las peticiones de un mismo canal se envían siempre a la misma instancia mediante un enrutamiento por hash consistente \cite{Ingram2023}.
 
@@ -152,7 +152,7 @@ Una transparencia indica qué parte de la distribución le esconde el sistema al
   \small
   \caption{Transparencias de distribución en Discord}
   \label{tab:transparencias}
-  \begin{tabularx}{\textwidth}{@{}p{2.3cm}X@{}}
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm}X@{}}
     \toprule
     \textbf{Transparencia} & \textbf{Cómo se ve en Discord} \\
     \midrule
@@ -223,7 +223,7 @@ Rehman et al. usan como referencia de disponibilidad la meta \enquote{Five 9's},
 
 Discord no se puede instalar, así que reproduje una de sus piezas con software libre: un clúster de ScyllaDB, la base donde Discord guarda sus mensajes \cite{Ingram2023}. Quería ver con mis propios datos qué pasa con las consultas QUORUM cuando se caen nodos.
 
-Usé Docker Desktop sobre WSL2 en mi PC, con tres contenedores de la imagen \texttt{scylladb/scylla:6.2}, cada uno con un núcleo y 1~GB de memoria. Levanté los nodos de uno en uno y esperé a que cada uno apareciera como \texttt{UN} (activo y normal) en \texttt{nodetool status} antes de levantar el siguiente. Con los tres nodos se agotaba el límite de entrada y salida asíncrona del sistema (\texttt{fs.aio-max-nr} = 65\,536) y \texttt{nodetool} no arrancaba. Lo resolví con la opción \texttt{-{}-reactor-backend=epoll}, con la que cada nodo usa mucho menos de ese recurso. Luego creé un keyspace con factor de replicación 3 y una tabla que imita la de Discord: la clave de partición es el canal más el bucket, y los mensajes se ordenan por un \texttt{timeuuid} (Código~\ref{lst:esquema}).
+Usé Docker Desktop sobre WSL2 en mi PC, con tres contenedores de la imagen \path{scylladb/scylla:6.2}, cada uno con un núcleo y 1~GB de memoria. Levanté los nodos de uno en uno y esperé a que cada uno apareciera como \texttt{UN} (activo y normal) en \texttt{nodetool status} antes de levantar el siguiente. El archivo \texttt{docker-compose.yml} lo preparó y probó Claude. Tuvo que agregar la opción \texttt{-{}-reactor-backend=epoll} porque con tres nodos se agotaba el límite de entrada y salida asíncrona del sistema (\texttt{fs.aio-max-nr} = 65\,536) y \texttt{nodetool} no arrancaba. Luego creé un keyspace con factor de replicación 3 y una tabla que imita la de Discord: la clave de partición es el canal más el bucket, y los mensajes se ordenan por un \texttt{timeuuid} (Código~\ref{lst:esquema}).
 
 \begin{lstlisting}[caption={Esquema de la base del experimento},label={lst:esquema}]
 CREATE KEYSPACE chat WITH replication =
