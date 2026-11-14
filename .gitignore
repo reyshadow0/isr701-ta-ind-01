@@ -27,3 +27,6 @@ __pycache__/
 *.pyc
 .env
 node_modules/
+
+# Respaldo temporal que crea draw.io mientras el diagrama está abierto
+*.bkp

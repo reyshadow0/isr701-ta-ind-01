@@ -1,0 +1,65 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="oct4MWRYLWelymBHeixz">
+    <mxGraphModel dx="2054" dy="1249" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-5" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="&lt;strong&gt;ScyllaDB&lt;/strong&gt;&amp;nbsp;&lt;br&gt;72 nodos &lt;br&gt;Factor de replicación: ?" vertex="1">
+          <mxGeometry height="140" width="170" x="580" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-10" edge="1" parent="1" source="ZzxULWtxCQ5Yt-YCkIIC-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=classic;startFill=1;" target="ZzxULWtxCQ5Yt-YCkIIC-7">
+          <mxGeometry relative="1" x="0.0031" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-16" connectable="0" parent="ZzxULWtxCQ5Yt-YCkIIC-10" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="WebSocket" vertex="1">
+          <mxGeometry relative="1" x="0.2198" as="geometry">
+            <mxPoint y="36" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-11" edge="1" parent="1" source="ZzxULWtxCQ5Yt-YCkIIC-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="ZzxULWtxCQ5Yt-YCkIIC-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-17" connectable="0" parent="ZzxULWtxCQ5Yt-YCkIIC-11" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="HTTPS (POST)&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.3642" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="&lt;strong&gt;Usuarios&lt;br&gt;&lt;/strong&gt;App de escritorio · Celular · Web" vertex="1">
+          <mxGeometry height="80" width="255" x="298" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="&lt;strong&gt;Gateway (Elixir)&lt;br&gt;&lt;/strong&gt;Un proceso por sesión&lt;br&gt;Un proceso por servidor (guild)" vertex="1">
+          <mxGeometry height="100" width="190" x="60" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-12" edge="1" parent="1" source="ZzxULWtxCQ5Yt-YCkIIC-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" target="ZzxULWtxCQ5Yt-YCkIIC-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-15" connectable="0" parent="ZzxULWtxCQ5Yt-YCkIIC-12" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Nuevo mensaje ?" vertex="1">
+          <mxGeometry relative="1" x="0.1882" y="-2" as="geometry">
+            <mxPoint x="32" y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-13" edge="1" parent="1" source="ZzxULWtxCQ5Yt-YCkIIC-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=classic;startFill=1;" target="ZzxULWtxCQ5Yt-YCkIIC-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-18" connectable="0" parent="ZzxULWtxCQ5Yt-YCkIIC-13" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="gRPC" vertex="1">
+          <mxGeometry relative="1" x="0.175" y="5" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="API monolítica" vertex="1">
+          <mxGeometry height="80" width="150" x="590" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-14" edge="1" parent="1" source="ZzxULWtxCQ5Yt-YCkIIC-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=classic;startFill=1;" target="ZzxULWtxCQ5Yt-YCkIIC-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-19" connectable="0" parent="ZzxULWtxCQ5Yt-YCkIIC-14" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="consulta (QUORUM)" vertex="1">
+          <mxGeometry relative="1" x="-0.0824" y="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ZzxULWtxCQ5Yt-YCkIIC-9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="&lt;strong&gt;Servicios de datos (Rust)&lt;br&gt;&lt;/strong&gt;Juntan peticiones iguales" vertex="1">
+          <mxGeometry height="90" width="180" x="575" y="580" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

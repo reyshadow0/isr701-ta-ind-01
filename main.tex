@@ -110,31 +110,8 @@ La cuarta es la base de datos. Desde mayo de 2022 los mensajes están en ScyllaD
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[
-      font=\small,
-      caja/.style={draw, rounded corners, align=center, inner sep=5pt},
-      flecha/.style={-{Stealth[length=2.2mm]}, thick},
-      doble/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, thick},
-      etq/.style={font=\footnotesize, align=left, inner sep=2pt}
-    ]
-    \node[caja, minimum width=14cm, minimum height=0.9cm] (cli) at (0,0)
-      {Clientes: aplicación de escritorio, celular y navegador};
-    \node[caja, text width=5.8cm] (gw) at (-3.9,-3.0)
-      {\textbf{Gateway} (Elixir, máquina virtual de Erlang)\\[3pt]
-       un proceso por sesión\\ un proceso por servidor (guild)};
-    \node[caja, text width=4.4cm] (api) at (3.9,-3.0)
-      {\textbf{API} monolítica};
-    \node[caja, text width=5.4cm] (ds) at (3.9,-5.4)
-      {\textbf{Servicios de datos} (Rust)\\[3pt] juntan peticiones iguales en una consulta};
-    \node[caja, text width=5.4cm] (db) at (3.9,-7.9)
-      {\textbf{ScyllaDB}\\[3pt] 72 nodos (desde mayo de 2022)\\ factor de replicación: ?};
-    \draw[doble] (gw.north |- cli.south) -- node[etq, right] {WebSocket\\\texttt{wss://gateway.discord.gg}} (gw.north);
-    \draw[flecha] (api.north |- cli.south) -- node[etq, right] {HTTPS\\\texttt{POST /api/v9/...}} (api.north);
-    \draw[flecha, dashed] (api.west) -- node[etq, above, align=center] {nuevo\\mensaje ?} (gw.east);
-    \draw[doble] (api.south) -- node[etq, right] {gRPC} (ds.north);
-    \draw[doble] (ds.south) -- node[etq, right] {consulta} (db.north);
-  \end{tikzpicture}
-  \caption{Arquitectura de Discord según \cite{Vishnevskiy2017elixir,Ingram2023} y las capturas de las Figuras~\ref{fig:captura-ws} y~\ref{fig:captura-post}. El signo \enquote{?} marca lo que las fuentes no confirman.}
+  \includegraphics[width=0.75\textwidth]{arquitectura-discord}
+  \caption{Arquitectura de Discord, dibujada en draw.io, según \cite{Vishnevskiy2017elixir,Ingram2023} y las capturas de las Figuras~\ref{fig:captura-ws} y~\ref{fig:captura-post}. El signo \enquote{?} marca lo que las fuentes no confirman.}
   \label{fig:arquitectura}
 \end{figure}
 
