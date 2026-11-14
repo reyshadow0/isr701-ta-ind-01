@@ -14,6 +14,8 @@
 \usepackage{microtype}
 \usepackage[a4paper,margin=2.5cm]{geometry}
 \usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{float}
@@ -75,6 +77,7 @@
 
 \section*{Resumen}
 % Entre 150 y 200 palabras.
+Este informe analiza la arquitectura de Discord, una plataforma de chat y voz que en 2017 ya tenía cerca de cinco millones de usuarios conectados al mismo tiempo. A partir del blog de ingeniería de Discord, cinco artículos académicos y la especificación de Matrix, describo sus piezas: una gateway en Elixir que mantiene una conexión WebSocket por sesión, una API monolítica que recibe los mensajes por HTTPS, servicios de datos en Rust y un clúster de ScyllaDB. Después la analizo con los conceptos de la Unidad 1: transparencias, CAP y PACELC, modelos de comunicación y tolerancia a fallos. Para comprobar lo que dicen las fuentes, capturé el tráfico de Discord web y monté un clúster local de tres nodos de ScyllaDB con factor de replicación 3. Con un nodo caído, las consultas con QUORUM siguieron respondiendo. Con dos nodos caídos, QUORUM falló al leer y al escribir, y ONE siguió funcionando. Al compararlo con Matrix, que es federado y prioriza la disponibilidad, concluyo que Discord gana rendimiento y control a cambio de depender de un solo operador, y que el nivel QUORUM elige la consistencia cuando la falla es grave.
 
 \newpage
 \tableofcontents
@@ -82,36 +85,290 @@
 
 % Mínimo 5 páginas de contenido (sin carátula, anexos ni referencias).
 
-\section{Introducción}
+\section{Introducción}\label{sec:introduccion}
 
-\section{Arquitectura del sistema}
+Discord es una plataforma de mensajería de texto, voz y video organizada en servidores y canales. Su escala lo vuelve un buen caso para estudiar sistemas distribuidos. En julio de 2017 tenía \enquote{nearly five million concurrent users} y procesaba millones de eventos por segundo \cite{Vishnevskiy2017elixir}. A inicios de 2022, su clúster de mensajes tenía 177 nodos de Cassandra y guardaba billones de mensajes \cite{Ingram2023}.
+
+El objetivo de este informe es analizar de forma crítica cómo está construido Discord con los conceptos de la Unidad 1, comprobar con un experimento propio cómo se comporta su base de datos ante fallas y compararlo con Matrix, un sistema de mensajería federado.
+
+Las fuentes sobre Discord son tres artículos de su blog de ingeniería \cite{Vishnevskiy2017billions,Vishnevskiy2017elixir,Ingram2023}. Los escribió la propia empresa, así que cuentan lo que Discord decidió publicar y no se pueden contrastar con documentación interna. Para el análisis uso cinco artículos académicos sobre microservicios, rendimiento en Erlang, tolerancia a fallos y niveles de consistencia \cite{Blinowski2022,Cazzola2022,Rehman2022,Ferreira2025,Velepucha2023}. Para Matrix uso su especificación \cite{MatrixSpec} y dos estudios recientes \cite{Martins2026,Viana2026}. La parte práctica tiene dos piezas: capturas del tráfico de Discord web, tomadas con las herramientas de desarrollador del navegador, y un clúster local de ScyllaDB, la base donde Discord guarda sus mensajes. Los comandos, los resultados y las capturas están en el repositorio.
+
+La Sección~\ref{sec:arquitectura} describe la arquitectura y la Sección~\ref{sec:unidad1} la analiza con los conceptos de la Unidad 1. Las Secciones~\ref{sec:experimento} y~\ref{sec:entorno} presentan el experimento y dos ejemplos de mi entorno. La Sección~\ref{sec:comparativo} compara Discord con Matrix, la Sección~\ref{sec:postura} expone mi postura crítica y la Sección~\ref{sec:conclusiones} cierra con las conclusiones.
+
+\section{Arquitectura del sistema}\label{sec:arquitectura}
 % Diagrama propio (draw.io o TikZ) y su evolución desde el esquema a mano (Anexo A).
 
-\section{Análisis con los conceptos de la Unidad 1}
+La Figura~\ref{fig:arquitectura} resume cómo está organizado Discord según sus artículos de ingeniería y lo que vi en mis capturas. Un mensaje pasa por cuatro piezas.
+
+La primera es la gateway, que mantiene la conexión en tiempo real con los clientes. Cada usuario se conecta por WebSocket y el servidor crea un proceso de sesión para él \cite{Vishnevskiy2017elixir}. Cada servidor de Discord, al que el equipo técnico llama \emph{guild}, también es un proceso. Los dos tipos de proceso están escritos en Elixir y corren en la máquina virtual de Erlang. Cuando algo pasa en un guild, su proceso lo reenvía a todas las sesiones conectadas a él \cite{Vishnevskiy2017elixir}. En Discord web, el navegador abre esta conexión con \texttt{wss://gateway.discord.gg} y el servidor responde \texttt{101 Switching Protocols} (Figura~\ref{fig:captura-ws}).
+
+La segunda es la API. Los mensajes que uno escribe no salen por el WebSocket. Al enviar un mensaje, el navegador hace un \texttt{POST} por HTTPS a \texttt{discord.com/api/v9/channels/\{id\}/messages} y recibe \texttt{200 OK} (Figura~\ref{fig:captura-post}). Discord describe esta pieza como \enquote{our API monolith} \cite{Ingram2023}, pero no dice en qué lenguaje está escrita.
+
+La tercera son los servicios de datos, escritos en Rust, que están entre la API y la base de datos. Tienen más o menos un endpoint gRPC por cada consulta a la base y no contienen lógica de negocio \cite{Ingram2023}. Su trabajo principal es juntar peticiones iguales: si muchos usuarios piden la misma fila al mismo tiempo, el servicio consulta la base una sola vez. Para lograrlo, las peticiones de un mismo canal se envían siempre a la misma instancia mediante un enrutamiento por hash consistente \cite{Ingram2023}.
+
+La cuarta es la base de datos. Desde mayo de 2022 los mensajes están en ScyllaDB, en 72 nodos de 9~TB de disco cada uno. Antes estaban en 177 nodos de Cassandra de unos 4~TB \cite{Ingram2023}. La tabla de mensajes se particiona por canal y por \emph{bucket}, que es una ventana de tiempo fija \cite{Ingram2023}. ScyllaDB es la tercera base que usa Discord: la primera fue MongoDB, que dejaron cuando, a finales de 2015 y con 100 millones de mensajes, los datos y los índices ya no cabían en RAM \cite{Vishnevskiy2017billions}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      font=\small,
+      caja/.style={draw, rounded corners, align=center, inner sep=5pt},
+      flecha/.style={-{Stealth[length=2.2mm]}, thick},
+      doble/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, thick},
+      etq/.style={font=\footnotesize, align=left, inner sep=2pt}
+    ]
+    \node[caja, minimum width=14cm, minimum height=0.9cm] (cli) at (0,0)
+      {Clientes: aplicación de escritorio, celular y navegador};
+    \node[caja, text width=5.8cm] (gw) at (-3.9,-3.0)
+      {\textbf{Gateway} (Elixir, máquina virtual de Erlang)\\[3pt]
+       un proceso por sesión\\ un proceso por servidor (guild)};
+    \node[caja, text width=4.4cm] (api) at (3.9,-3.0)
+      {\textbf{API} monolítica};
+    \node[caja, text width=5.4cm] (ds) at (3.9,-5.4)
+      {\textbf{Servicios de datos} (Rust)\\[3pt] juntan peticiones iguales en una consulta};
+    \node[caja, text width=5.4cm] (db) at (3.9,-7.9)
+      {\textbf{ScyllaDB}\\[3pt] 72 nodos (desde mayo de 2022)\\ factor de replicación: ?};
+    \draw[doble] (gw.north |- cli.south) -- node[etq, right] {WebSocket\\\texttt{wss://gateway.discord.gg}} (gw.north);
+    \draw[flecha] (api.north |- cli.south) -- node[etq, right] {HTTPS\\\texttt{POST /api/v9/...}} (api.north);
+    \draw[flecha, dashed] (api.west) -- node[etq, above, align=center] {nuevo\\mensaje ?} (gw.east);
+    \draw[doble] (api.south) -- node[etq, right] {gRPC} (ds.north);
+    \draw[doble] (ds.south) -- node[etq, right] {consulta} (db.north);
+  \end{tikzpicture}
+  \caption{Arquitectura de Discord según \cite{Vishnevskiy2017elixir,Ingram2023} y las capturas de las Figuras~\ref{fig:captura-ws} y~\ref{fig:captura-post}. El signo \enquote{?} marca lo que las fuentes no confirman.}
+  \label{fig:arquitectura}
+\end{figure}
+
+El diagrama viene del esquema a mano del Anexo~A (Figura~\ref{fig:esquema-a-mano}), que hice el 12 de noviembre con lo que decían las fuentes. Conservé las mismas piezas y flechas, y cambié dos cosas con lo que encontré después. En el esquema, la flecha de envío decía \enquote{HTTPS ?}. La captura de la Figura~\ref{fig:captura-post} confirmó que el mensaje sale por HTTPS hacia la API, así que en el diagrama ya no lleva signo de pregunta. En el cuadro de ScyllaDB había escrito \enquote{cada mensaje en 3 réplicas}, pero al revisar de nuevo las fuentes vi que ese dato no está confirmado para el clúster actual. El clúster de Cassandra de 2017 tenía 12 nodos con factor de replicación 3 \cite{Vishnevskiy2017billions}, y el artículo de 2023 dice que cada partición se replica en tres nodos por defecto o según el factor que se configure, sin decir cuál usa Discord \cite{Ingram2023}. Por eso ahora lleva \enquote{?}. La flecha \enquote{nuevo mensaje ?} entre la API y la gateway quedó igual, porque ninguna de las fuentes explica cómo se comunican esas dos piezas.
+
+\section{Análisis con los conceptos de la Unidad 1}\label{sec:unidad1}
 
 \subsection{Transparencias de distribución}
 % Acceso, ubicación, migración, reubicación, replicación, concurrencia y fallos.
 
-\subsection{CAP y PACELC}
+Una transparencia indica qué parte de la distribución le esconde el sistema al usuario. La Tabla~\ref{tab:transparencias} revisa las siete en Discord.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Transparencias de distribución en Discord}
+  \label{tab:transparencias}
+  \begin{tabularx}{\textwidth}{@{}p{2.3cm}X@{}}
+    \toprule
+    \textbf{Transparencia} & \textbf{Cómo se ve en Discord} \\
+    \midrule
+    Acceso & El cliente lee y envía mensajes con la misma API HTTPS. No sabe que detrás hay servicios de datos en Rust y un clúster de ScyllaDB \cite{Ingram2023}. \\
+    Ubicación & El usuario no sabe en qué nodo corre el proceso de su servidor. Son las sesiones las que buscan ese nodo en un anillo de hash \cite{Vishnevskiy2017elixir}. \\
+    Migración & Los mensajes pasaron de Cassandra a ScyllaDB en 2022 \cite{Ingram2023}. Como el cliente solo habla con la API y con la gateway, el cambio de base no le exige nada. \\
+    Reubicación & Las fuentes no describen mover un proceso de guild a otro nodo mientras está en uso, así que no tengo evidencia para evaluarla. \\
+    Replicación & Cada partición de mensajes se guarda en varios nodos, tres por defecto \cite{Ingram2023}, y el usuario ve un solo mensaje. \\
+    Concurrencia & Muchos usuarios leen el mismo canal a la vez y los servicios de datos juntan esas lecturas en una sola consulta \cite{Ingram2023}. Con Cassandra, las escrituras en conflicto se resolvían con \enquote{last write wins} por columna \cite{Vishnevskiy2017billions}. \\
+    Fallos & Con tres réplicas y QUORUM, la caída de un nodo no se nota (Sección~\ref{sec:experimento}). Las fallas grandes sí se notan, como muestra la Sección~\ref{sec:fallos}. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+La transparencia tiene un límite que el propio Discord reconoce. Con Cassandra, un canal con muchas lecturas simultáneas volvía lento a su nodo, y como se leía y escribía con QUORUM, esa lentitud alcanzaba a muchas otras consultas que pasaban por el mismo nodo \cite{Ingram2023}. Un usuario de otro canal, sin relación con el primero, también lo sentía. La distribución dejaba de ser invisible justo en los momentos de más carga.
+
+\subsection{CAP y PACELC}\label{sec:cap}
+
+El teorema CAP dice que, cuando la red se parte, un sistema distribuido tiene que elegir entre responder con datos que quizá no son los últimos (disponibilidad) o negarse a responder (consistencia). PACELC agrega el caso en que no hay partición: ahí la elección es entre latencia y consistencia.
+
+Discord describe a Cassandra como una base AP, que cambia consistencia fuerte por disponibilidad \cite{Vishnevskiy2017billions}. Sin embargo, en Cassandra y en ScyllaDB el nivel de consistencia se elige en cada consulta, y en la época de Cassandra Discord leía y escribía con QUORUM \cite{Ingram2023}. El artículo no dice si eso cambió con ScyllaDB. Con tres réplicas, QUORUM exige la respuesta de dos. Como la lectura y la escritura usan dos de tres réplicas, siempre coinciden en al menos una ($2 + 2 > 3$), y esa réplica tiene la última escritura confirmada.
+
+Mi experimento muestra qué significa esto ante una falla grave (Sección~\ref{sec:experimento}). Con dos de los tres nodos caídos, las consultas con QUORUM fallaron al leer y al escribir, y las de ONE siguieron funcionando. Con QUORUM, Discord se queda del lado de la consistencia: si no hay mayoría de réplicas, la consulta falla en vez de devolver un mensaje que quizá no está al día. La base es AP por diseño, pero con esa configuración se comporta como CP.
+
+Sin partición, PACELC pregunta cuánto cuesta esa consistencia en latencia, porque QUORUM tiene que esperar a una segunda réplica. Ferreira et al. midieron ese costo en Cassandra con YCSB: al pasar a consistencia fuerte, las operaciones por segundo bajaron hasta 95~\% en algunas cargas de trabajo \cite{Ferreira2025}. Discord sintió el costo de otra forma. Con Cassandra, un nodo lento arrastraba a muchas consultas justamente porque todas esperaban a QUORUM \cite{Ingram2023}. Después de migrar a ScyllaDB, el percentil 99 de la lectura de mensajes bajó de 40--125~ms a unos 15~ms, y el de la escritura, de 5--70~ms a 5~ms estables \cite{Ingram2023}. Con la configuración que describe el artículo, la clasificación en PACELC sería PC/EC: consistencia con partición y también sin ella.
+
+Mi experimento no sirve para medir este costo. Con tres corridas por nivel, el promedio salió más alto en QUORUM, pero la mediana salió al revés (Tabla~\ref{tab:latencia}). En un clúster real como el de Discord, QUORUM espera a otro servidor a través de la red, y en mi PC los tres nodos estaban en la misma máquina.
 
 \subsection{Modelos de comunicación}
 
-\subsection{Tolerancia a fallos}
+Discord usa un modelo de comunicación distinto en cada tramo del recorrido de un mensaje.
+
+Entre el cliente y la API usa petición y respuesta sobre HTTPS. La Figura~\ref{fig:captura-post} muestra el envío de un mensaje: un \texttt{POST} al recurso del canal que devuelve \texttt{200 OK}. Es el modelo cliente-servidor, donde cada petición es independiente de las demás.
+
+Entre la gateway y el cliente la conexión es persistente. El cliente abre un WebSocket una vez (Figura~\ref{fig:captura-ws}) y por ahí el servidor le envía los eventos sin que el cliente tenga que preguntar. Dentro de la gateway, el reparto sigue un esquema de publicación y suscripción: el proceso del guild publica cada evento y lo reenvía a todas las sesiones conectadas \cite{Vishnevskiy2017elixir}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{ejecucion/01-discord-websocket-gateway}
+  \caption{Conexión WebSocket de Discord web con \texttt{gateway.discord.gg} en la pestaña Red de las herramientas de desarrollador (13/11/2026, 18:57).}
+  \label{fig:captura-ws}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{ejecucion/02-discord-post-mensaje}
+  \caption{Envío del mensaje \enquote{prueba TA-IND-01}: \texttt{POST} a la API por HTTPS con respuesta \texttt{200 OK} (13/11/2026, 19:00).}
+  \label{fig:captura-post}
+\end{figure}
+
+Entre los procesos de Elixir, la comunicación es por paso de mensajes y cada proceso tiene su cola. Ahí apareció el cuello de botella que Discord reportó en 2017: en guilds de hasta 30\,000 usuarios conectados, los procesos no alcanzaban a vaciar sus colas, y publicar un evento podía tardar entre 900~ms y 2,1~s en horas pico \cite{Vishnevskiy2017elixir}. Lo resolvieron con Manifold, una librería que agrupa a los destinatarios por nodo remoto y entrega cada grupo a un proceso de ese nodo, con lo que baja el tráfico entre nodos \cite{Vishnevskiy2017elixir}. Cazzola et al. presentan PerformERL, una herramienta de pruebas de rendimiento para Erlang que mide, entre otras cosas, la cola de mensajes de cada proceso \cite{Cazzola2022}. Esa es la métrica que deja ver un problema como el de los guilds grandes.
+
+Entre la API y los servicios de datos se usa RPC con gRPC, con un endpoint por cada consulta \cite{Ingram2023}. La API llama a una función remota y no ve cómo el servicio junta las peticiones repetidas. Velepucha y Flores recogen la idea de Parnas de que modularizar un sistema lo hace más flexible y más fácil de entender \cite{Velepucha2023}. Los servicios de datos son un caso de eso: esconden una decisión de diseño, la agrupación de consultas, detrás de una interfaz pequeña.
+
+\subsection{Tolerancia a fallos}\label{sec:fallos}
 % Al menos un incidente real documentado, si existe.
 
-\section{Experimentación propia}
+Rehman et al. separan las técnicas de tolerancia a fallos en reactivas, como el checkpoint, la replicación y el reintento, y proactivas, como el self-healing, el rejuvenecimiento de software y la migración preventiva \cite{Rehman2022}. Con esa clasificación, lo que documenta Discord es casi todo reactivo. Replica cada partición de mensajes en varios nodos \cite{Ingram2023}, y cuando una petición de una sesión a un guild se vencía, la volvía a intentar después de una espera \cite{Vishnevskiy2017elixir}. Esos reintentos también causaron un problema: cuando un servicio dejaba de responder, las peticiones se acumulaban en las colas hasta dejar sin memoria a toda la máquina virtual de Erlang. Para cortar esa falla en cascada crearon Semaphore, una librería que limita las peticiones pendientes y hace que la sesión no envíe las que probablemente van a fallar \cite{Vishnevskiy2017elixir}. En otro caso, cuando se cayó el servicio de presencia, las sesiones no se vieron afectadas y el servicio se reconstruyó en minutos al reiniciarlo \cite{Vishnevskiy2017elixir}. Además, al elegir base de datos, Discord puso el failover automático y el bajo mantenimiento entre sus requisitos \cite{Vishnevskiy2017billions}.
+
+El incidente mejor documentado está en el artículo de 2017 \cite{Vishnevskiy2017billions}. Unos seis meses después de pasar a Cassandra, la base dejó de responder y la recolección de basura detenía todo durante 10 segundos de forma constante. Un canal tardaba 20 segundos en cargar: era el servidor público del subreddit de Puzzles \& Dragons, donde se habían borrado millones de mensajes y quedaba uno solo. Al borrar, Cassandra deja una marca de borrado (\emph{tombstone}) que se elimina más tarde, y al leer ese canal tenía que recorrer millones de esas marcas. Eso generaba basura más rápido de lo que la JVM alcanzaba a recoger. Lo arreglaron de dos formas: bajaron la vida de los tombstones de 10 a 2 días, porque las reparaciones corren cada noche, y cambiaron las consultas para que registraran los buckets vacíos y no volvieran a recorrerlos \cite{Vishnevskiy2017billions}.
+
+Los tombstones volvieron a aparecer en 2022. La migración a ScyllaDB se detuvo al 99,9999~\% porque el programa de migración agotaba el tiempo de espera al leer los últimos rangos de datos, que estaban llenos de tombstones sin compactar. Al compactar ese rango, la migración terminó \cite{Ingram2023}.
+
+Rehman et al. usan como referencia de disponibilidad la meta \enquote{Five 9's}, que permite 5 minutos y 15 segundos de caída al año \cite{Rehman2022}. Las fuentes de Discord no publican su disponibilidad, así que no puedo compararla con esa meta.
+
+\section{Experimentación propia}\label{sec:experimento}
 % Comandos, salida e interpretación; los archivos completos en experimento/.
 
-\section{Ejemplos del entorno del estudiante}
+Discord no se puede instalar, así que reproduje una de sus piezas con software libre: un clúster de ScyllaDB, la base donde Discord guarda sus mensajes \cite{Ingram2023}. Quería ver con mis propios datos qué pasa con las consultas QUORUM cuando se caen nodos.
+
+Usé Docker Desktop sobre WSL2 en mi PC, con tres contenedores de la imagen \texttt{scylladb/scylla:6.2}, cada uno con un núcleo y 1~GB de memoria. Levanté los nodos de uno en uno y esperé a que cada uno apareciera como \texttt{UN} (activo y normal) en \texttt{nodetool status} antes de levantar el siguiente. Con los tres nodos se agotaba el límite de entrada y salida asíncrona del sistema (\texttt{fs.aio-max-nr} = 65\,536) y \texttt{nodetool} no arrancaba. Lo resolví con la opción \texttt{-{}-reactor-backend=epoll}, con la que cada nodo usa mucho menos de ese recurso. Luego creé un keyspace con factor de replicación 3 y una tabla que imita la de Discord: la clave de partición es el canal más el bucket, y los mensajes se ordenan por un \texttt{timeuuid} (Código~\ref{lst:esquema}).
+
+\begin{lstlisting}[caption={Esquema de la base del experimento},label={lst:esquema}]
+CREATE KEYSPACE chat WITH replication =
+  {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}
+  AND tablets = {'enabled': false};
+CREATE TABLE chat.mensajes (
+  canal_id int, bucket int, mensaje_id timeuuid,
+  autor text, contenido text,
+  PRIMARY KEY ((canal_id, bucket), mensaje_id));
+\end{lstlisting}
+
+Cada comando guardó su salida en \texttt{experimento/resultados/}, y la lista completa de comandos está en \texttt{experimento/comandos.txt}. La primera prueba compara la latencia. Con los tres nodos activos, ejecuté tres veces la misma lectura con ONE y tres veces con QUORUM, con \texttt{TRACING ON} para obtener el tiempo total de cada consulta (Código~\ref{lst:latencia}).
+
+\begin{lstlisting}[caption={Lectura con QUORUM y trazado activado},label={lst:latencia}]
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; TRACING ON;
+  SELECT autor, contenido FROM chat.mensajes
+  WHERE canal_id = 1 AND bucket = 1;"
+\end{lstlisting}
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Latencia de la misma lectura con los tres nodos activos, en microsegundos}
+  \label{tab:latencia}
+  \begin{tabular}{@{}lrrrrr@{}}
+    \toprule
+    \textbf{Nivel} & \textbf{Medición 1} & \textbf{Medición 2} & \textbf{Medición 3} & \textbf{Promedio} & \textbf{Mediana} \\
+    \midrule
+    ONE    & 700 & 598 & 143 & 480 & 598 \\
+    QUORUM & 836 & 534 & 404 & 591 & 534 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Las mediciones varían mucho entre sí. El promedio dice que QUORUM fue unos 110~$\mu$s más lento, pero la mediana dice lo contrario. Con tres corridas y los tres nodos en la misma PC, sin una red real de por medio, la diferencia queda dentro del ruido y no permite decir cuál es más rápido. En el archivo de resultados, las marcas de tiempo salen como \texttt{2026-11-14 00:13} porque el contenedor usa la hora UTC, que va cinco horas adelante de Ecuador; en mi PC eran las 19:13.
+
+Después detuve \texttt{scylla3} con \texttt{docker stop}, luego \texttt{scylla2}, y al final los volví a levantar con \texttt{docker start}. Esperé 30 segundos después de cada cambio antes de consultar. La Tabla~\ref{tab:fallas} resume lo que pasó, y las Figuras~\ref{fig:dos-caidos} y~\ref{fig:recuperacion} muestran los dos momentos más importantes.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Pruebas con nodos caídos y factor de replicación 3}
+  \label{tab:fallas}
+  \begin{tabularx}{\textwidth}{@{}p{4.6cm}cX@{}}
+    \toprule
+    \textbf{Prueba} & \textbf{Nodos activos} & \textbf{Resultado} \\
+    \midrule
+    Lectura con QUORUM & 2 de 3 & Devuelve el mensaje \\
+    Lectura con QUORUM & 1 de 3 & Falla: \texttt{Requires 2, alive 1} \\
+    Lectura con ONE & 1 de 3 & Devuelve el mensaje \\
+    Escritura con QUORUM & 1 de 3 & Falla: \texttt{Requires 2, alive 1} \\
+    Escritura con ONE & 1 de 3 & Se guarda \\
+    Lectura con QUORUM al levantar los nodos & 3 de 3 & Dos filas: el primer mensaje y el que se escribió con ONE \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{ejecucion/05-dos-nodos-caidos}
+  \caption{Con dos nodos caídos, la escritura con QUORUM falla y la escritura con ONE se guarda (13/11/2026, 19:18).}
+  \label{fig:dos-caidos}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{ejecucion/06-recuperacion}
+  \caption{Con los tres nodos de nuevo activos, QUORUM devuelve el primer mensaje y el escrito con ONE (13/11/2026, 19:21).}
+  \label{fig:recuperacion}
+\end{figure}
+
+Con un nodo caído, QUORUM siguió respondiendo porque necesita dos de tres réplicas y quedaban dos. Con dos nodos caídos, la misma base respondió distinto según el nivel pedido. QUORUM rechazó la lectura y la escritura con el error \texttt{Cannot achieve consistency level for cl QUORUM. Requires 2, alive 1}: prefirió fallar antes que dar un dato que quizá no estaba al día. ONE leyó y escribió con la única réplica viva: prefirió seguir disponible. Es CAP con datos propios. En ScyllaDB, la elección entre consistencia y disponibilidad se hace en cada consulta.
+
+Al levantar los nodos, la lectura con QUORUM devolvió dos filas: el primer mensaje y el que escribí con ONE. El que intenté escribir con QUORUM no aparece, porque se rechazó antes de guardarse. Esta prueba demuestra que la escritura con ONE no se perdió. No demuestra que ya se hubiera copiado a los otros dos nodos, porque la fila estaba en \texttt{scylla1}, que también coordinó la lectura, y a QUORUM le bastaba con una réplica más.
+
+Si Discord mantiene QUORUM en ScyllaDB, el resultado se traslada así: cuando una falla deja sin mayoría a las réplicas de un canal, sus consultas fallan antes de devolver mensajes que podrían no ser los más recientes.
+
+El experimento tiene límites claros. Son pocas mediciones, los tres nodos corren en una sola máquina sin red real, Discord usa 72 nodos y no tres, y cada uno de mis nodos tenía un núcleo y 1~GB de memoria. Sirve para ver el comportamiento ante fallas, pero no para medir rendimiento.
+
+\section{Ejemplos del entorno del estudiante}\label{sec:entorno}
 % Al menos 2 sistemas que uso de primera mano, cada uno ligado a un concepto.
 
-\section{Análisis comparativo}
+Uso dos sistemas de mi día a día para ilustrar conceptos de la Unidad 1.
+
+El primero es GitHub, que muestra la replicación y la consistencia eventual. El repositorio de este informe tiene dos copias: una en mi PC y otra en GitHub. Cada commit que hago queda primero solo en mi copia local. Mientras no ejecuto \texttt{git push}, mi rama \texttt{main} va adelante de \texttt{origin/main}, y quien abra el repositorio en GitHub ve una versión anterior. Después del push, las dos copias vuelven a coincidir. Es replicación con sincronización manual: las copias pueden diferir por un tiempo y luego convergen, que es la idea de la consistencia eventual. También muestra el lado de la disponibilidad, porque si GitHub no responde puedo seguir haciendo commits en local y subirlos después.
+
+El segundo es el SGA de la universidad, que muestra las transparencias de acceso y de ubicación. En esta tarea subí la carátula al SGA el 11 de noviembre y la volví a subir el 12, cuando la tarea pasó a ser individual. Para hacerlo solo uso el navegador. No sé en qué servidor queda guardado el archivo ni si hay copias de él: para mí, el SGA es una página web. Es el mismo tipo de transparencia que tiene Discord, donde el usuario no ve los nodos de ScyllaDB.
+
+\section{Análisis comparativo}\label{sec:comparativo}
 % Tabla de al menos 5 criterios y discusión.
 
-\section{Postura crítica}
+Matrix es un estándar abierto que define APIs para comunicación descentralizada sobre una federación de servidores sin un punto único de control \cite{MatrixSpec}. Cada servidor, llamado homeserver, es independiente y lo puede operar cualquier persona u organización \cite{Martins2026}. Lo elegí porque resuelve el mismo problema que Discord, el chat en grupo en tiempo real, con una arquitectura federada en lugar de centralizada. Su implementación principal es Synapse, escrita en Python, y una alternativa es Tuwunel, escrita en Rust \cite{Viana2026}. La Tabla~\ref{tab:comparativa} compara los dos sistemas.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Comparación entre Discord y Matrix}
+  \label{tab:comparativa}
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm}XX@{}}
+    \toprule
+    \textbf{Criterio} & \textbf{Discord} & \textbf{Matrix} \\
+    \midrule
+    Control & Una sola empresa opera todos los servidores. & Cualquiera puede operar un homeserver y ningún homeserver es dueño de una sala \cite{MatrixSpec,Martins2026}. \\
+    Dónde están los mensajes & En un clúster propio de ScyllaDB con 72 nodos \cite{Ingram2023}. & Cada homeserver con usuarios en una sala guarda una copia de ella \cite{MatrixSpec}. \\
+    Comportamiento ante una partición & Con QUORUM, la consulta falla si no hay mayoría de réplicas (Sección~\ref{sec:experimento}). & Prioriza la disponibilidad y la tolerancia a particiones a costa de la consistencia \cite{MatrixSpec}. \\
+    Comunicación con el cliente & HTTPS para enviar y WebSocket para recibir eventos (Figuras~\ref{fig:captura-ws} y~\ref{fig:captura-post}). & \texttt{PUT} por HTTP para enviar y una petición \texttt{GET} de larga duración para recibir \cite{MatrixSpec}. \\
+    Comunicación entre servidores & gRPC entre la API y los servicios de datos, y paso de mensajes entre procesos de Erlang \cite{Ingram2023,Vishnevskiy2017elixir}. & Server-Server API sobre HTTPS \cite{MatrixSpec}. \\
+    Orden y conflictos & Con Cassandra, \enquote{last write wins} por columna \cite{Vishnevskiy2017billions}. & Grafo acíclico dirigido de eventos y un algoritmo determinista de resolución de estado \cite{MatrixSpec,Martins2026}. \\
+    Si se cae un servidor & Depende de cuántas réplicas queden; si cae el servicio, no hay otro proveedor. & Solo pierden el acceso los usuarios de ese homeserver; la sala sigue en los demás. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+La diferencia de fondo es quién controla los datos. En Discord, una sola empresa opera la gateway, la API y los 72 nodos de ScyllaDB. Puede ajustar cada pieza, como hizo al cambiar de base de datos, pero todo depende de su infraestructura. En Matrix, los datos de una sala se replican en todos los homeservers que tienen usuarios en ella, y ninguno es dueño de la sala \cite{MatrixSpec}. Si un homeserver se cae, sus usuarios pierden el acceso, pero la sala sigue en los demás servidores. Esto último lo deduzco de la arquitectura; la especificación no lo dice con esas palabras.
+
+Esa diferencia explica sus elecciones en CAP. La especificación dice que Matrix optimiza la disponibilidad y la tolerancia a particiones a costa de la consistencia \cite{MatrixSpec}. Cada homeserver guarda el historial de una sala como un grafo de eventos con orden parcial y lo sincroniza con los demás con consistencia eventual \cite{MatrixSpec}. Cuando dos servidores reciben eventos en distinto orden, un algoritmo determinista de resolución de estado hace que todos los homeservers que no son maliciosos terminen con el mismo estado de la sala \cite{Martins2026}. Discord, con QUORUM, toma el camino opuesto en su base de mensajes: si no hay mayoría, la consulta falla.
+
+La federación también tiene costos. Martins et al. señalan que agrega complejidad a la sincronización y a mantener unida la red, y que Matrix no protege bien los metadatos por defecto \cite{Martins2026}. En rendimiento, Viana et al. estudiaron el endpoint \texttt{/sync}, que es el más consultado en un homeserver porque los clientes lo llaman periódicamente para recibir eventos. Con 200 usuarios concurrentes, Synapse usó unas tres veces más CPU que Tuwunel en casi todas las configuraciones, y en una de ellas cerca del 1~\% de las peticiones falló por tiempo de espera \cite{Viana2026}. Discord entrega los eventos por un WebSocket que se mantiene abierto, sin que el cliente tenga que volver a preguntar.
+
+Las dos partes de la comparación tienen un límite parecido. Lo que sé de Discord viene de la propia empresa, y sobre Matrix hay poca evidencia académica: Martins et al. encontraron 21 estudios primarios entre 156 trabajos revisados \cite{Martins2026}.
+
+\section{Postura crítica}\label{sec:postura}
 % Fortalezas, limitaciones, trade-offs y cuándo no conviene.
 
-\section{Conclusiones}
+Discord muestra que una arquitectura centralizada puede crecer mucho si cada pieza se ajusta a su carga. Llegó a casi cinco millones de usuarios simultáneos en 2017 \cite{Vishnevskiy2017elixir} y, ya con ScyllaDB, soportó sin problemas la final del Mundial de 2022: el gráfico de mensajes enviados tiene un pico por cada gol, por el medio tiempo, por el tiempo extra y por los penales \cite{Ingram2023}. También valoro que la empresa publique sus problemas, como los tombstones o las colas de los guilds, porque eso permite estudiar su arquitectura desde afuera.
+
+Veo tres limitaciones. La primera es la dependencia de un solo operador: si la infraestructura de Discord falla, no hay otro servidor al que ir, y el usuario no decide dónde quedan sus mensajes. La segunda viene del diseño de la base. Particionar por canal deja toda la carga de un canal muy activo en los mismos nodos, y con QUORUM un nodo lento afectaba a otras consultas \cite{Ingram2023}. La tercera es la evidencia: todo lo que sé de la arquitectura viene del blog de la empresa, y ninguna fuente independiente lo verifica.
+
+El intercambio principal es consistencia contra disponibilidad. Con QUORUM, un usuario no debería leer una versión vieja de un canal, pero si ese canal pierde dos de sus tres réplicas, deja de funcionar. Para un chat me parece una elección razonable: prefiero que un canal falle unos minutos a que muestre una conversación incompleta. El otro intercambio está en la estructura del sistema. Discord dejó la API como monolito y separó solo la capa de acceso a datos, donde tenía un problema medido. Blinowski et al. encontraron que, en una sola máquina, un monolito atendió más peticiones que su versión en microservicios, y que en la nube escalar verticalmente fue más rentable \cite{Blinowski2022}. Separar servicios tiene un costo, y Discord lo pagó solo donde resolvía algo concreto.
+
+Una arquitectura como la de Discord no conviene cuando una organización necesita controlar sus propios datos, por ejemplo una institución que no quiere que sus conversaciones dependan de una empresa externa. Ahí encaja mejor un modelo federado como Matrix. Tampoco conviene copiarla para una aplicación pequeña, porque una gateway distribuida en Elixir y un clúster de decenas de nodos responden a problemas que aparecen con millones de usuarios. Y si un sistema necesita aceptar escrituras aun con fallas graves, QUORUM no es la opción adecuada; ahí sirve más un nivel como ONE o un diseño AP como el de Matrix.
+
+Mi postura es que el diseño de Discord es correcto para lo que busca: un chat masivo, operado por una sola empresa, donde la consistencia de los mensajes y la latencia baja pesan más que la independencia del usuario. Su punto débil es la confianza, porque todo depende de un operador y de lo que ese operador decide publicar.
+
+\section{Conclusiones}\label{sec:conclusiones}
+
+La arquitectura de Discord separa el envío de mensajes, que va por HTTPS a una API monolítica, de la entrega de eventos, que va por WebSocket desde una gateway en Elixir. Las capturas de Discord web confirmaron esa separación, que en mi esquema a mano todavía tenía un signo de pregunta.
+
+Cassandra y ScyllaDB son bases AP por diseño, pero el nivel QUORUM con el que Discord leía y escribía hace que, ante una falla grave, la consulta falle. Mi experimento lo mostró: con dos de tres nodos caídos, QUORUM falló al leer y al escribir, y ONE siguió respondiendo. La misma base elige consistencia o disponibilidad según el nivel de cada consulta.
+
+El experimento no sirvió para medir el costo de QUORUM en latencia. Con tres corridas en una sola máquina, la diferencia quedó dentro del ruido. Para medirlo hacen falta más repeticiones y nodos en máquinas distintas.
+
+Frente a Matrix, Discord gana control y rendimiento y pierde independencia. Matrix reparte cada sala entre los homeservers de sus usuarios y acepta consistencia eventual, mientras que Discord concentra todo en su propia infraestructura.
+
+Las fuentes sobre Discord son de la propia empresa. Un análisis más sólido necesitaría datos independientes, como reportes públicos de disponibilidad.
 
 \section{Declaración de uso de inteligencia artificial}
 
