@@ -1,0 +1,37 @@
+﻿try { . "c:\Users\PC\AppData\Local\Programs\Microsoft VS Code\69047191fc\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch {}
+Set-Location "C:\Users\PC\Aplicaciones-Distribuidas\actividades\isr701-ta-ind-01\experimento"
+New-Item -ItemType Directory -Force resultados | Out-Null
+function prompt { "[$env:USERNAME@$env:COMPUTERNAME $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $(Split-Path -Leaf (Get-Location))> " }
+filter Guardar([string]$Archivo) { $l = "$_"; $l; Add-Content -Path $Archivo -Value $l -Encoding UTF8 }
+docker compose up -d scylla1
+docker exec scylla1 nodetool status
+docker compose up -d scylla1
+docker exec scylla1 nodetool status
+docker compose up -d scylla2
+docker exec scylla1 nodetool status
+docker compose up -d scylla3
+docker exec scylla1 nodetool status
+docker exec scylla1 nodetool status
+docker exec scylla1 nodetool status 2>&1 | Guardar resultados\01-nodetool-3-nodos.txt
+docker exec scylla1 cqlsh -e "CREATE KEYSPACE chat WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': false};" 2>&1 | Guardar resultados\02-crear-tabla.txt
+docker exec scylla1 cqlsh -e "CREATE TABLE chat.mensajes (canal_id int, bucket int, mensaje_id timeuuid, autor text, contenido text, PRIMARY KEY ((canal_id, bucket), mensaje_id));" 2>&1 | Guardar resultados\02-crear-tabla.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; INSERT INTO chat.mensajes (canal_id, bucket, mensaje_id, autor, contenido) VALUES (1, 1, now(), 'mario', 'primer mensaje con QUORUM'); SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Guardar resultados\02-crear-tabla.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY ONE; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY ONE; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY ONE; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; TRACING ON; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Select-String "Consistency level|Request complete" | Guardar resultados\03-latencia-one-vs-quorum.txt
+docker stop scylla3
+docker exec scylla1 nodetool status 2>&1 | Guardar resultados\04-un-nodo-caido.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Guardar resultados\04-un-nodo-caido.txt
+docker stop scylla2
+docker exec scylla1 nodetool status 2>&1 | Guardar resultados\04-un-nodo-caido.txt
+docker exec scylla1 nodetool status 2>&1 | Guardar resultados\05-dos-nodos-caidos.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Guardar resultados\05-dos-nodos-caidos.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY ONE; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Guardar resultados\05-dos-nodos-caidos.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; INSERT INTO chat.mensajes (canal_id, bucket, mensaje_id, autor, contenido) VALUES (1, 1, now(), 'mario', 'escrito con QUORUM y dos nodos caidos');" 2>&1 | Guardar resultados\05-dos-nodos-caidos.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY ONE; INSERT INTO chat.mensajes (canal_id, bucket, mensaje_id, autor, contenido) VALUES (1, 1, now(), 'mario', 'escrito con ONE y dos nodos caidos');" 2>&1 | Guardar resultados\05-dos-nodos-caidos.txt
+docker start scylla2 scylla3
+docker exec scylla1 nodetool status 2>&1 | Guardar resultados\06-recuperacion.txt
+docker exec scylla1 cqlsh -e "CONSISTENCY QUORUM; SELECT autor, contenido FROM chat.mensajes WHERE canal_id = 1 AND bucket = 1;" 2>&1 | Guardar resultados\06-recuperacion.txt

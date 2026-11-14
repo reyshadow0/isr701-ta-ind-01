@@ -1,0 +1,12 @@
+﻿Consistency level set to ONE.
+                                                                                                                                                  Request complete | 2026-11-14 00:13:49.886700 | 172.19.0.2 |            700 | 172.19.0.2
+Consistency level set to ONE.
+                                                                                                                                                  Request complete | 2026-11-14 00:14:00.237598 | 172.19.0.2 |            598 | 172.19.0.2
+Consistency level set to ONE.
+                                                                                                                                                  Request complete | 2026-11-14 00:14:01.150143 | 172.19.0.2 |            143 | 172.19.0.2
+Consistency level set to QUORUM.
+                                                                                                                                                      Request complete | 2026-11-14 00:15:13.041836 | 172.19.0.2 |            836 | 172.19.0.2
+Consistency level set to QUORUM.
+                                                                                                                                                      Request complete | 2026-11-14 00:15:14.116534 | 172.19.0.2 |            534 | 172.19.0.2
+Consistency level set to QUORUM.
+                                                                                                                                                      Request complete | 2026-11-14 00:15:15.094404 | 172.19.0.2 |            404 | 172.19.0.2

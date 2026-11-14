@@ -1,0 +1,18 @@
+﻿Datacenter: datacenter1
+=======================
+Status=Up/Down
+|/ State=Normal/Leaving/Joining/Moving
+-- Address    Load      Tokens Owns Host ID                              Rack 
+UN 172.19.0.2 354.02 KB 256    ?    ad0c7915-c968-4f49-b59c-71544b098c0f rack1
+UN 172.19.0.3 410.74 KB 256    ?    ec6011d6-86a5-47c5-aeab-2f35e635111a rack1
+UN 172.19.0.4 398.45 KB 256    ?    bbe65cdf-07db-4a56-a0e2-5096f1d2cc1c rack1
+
+Note: Non-system keyspaces don't have the same replication settings, effective ownership information is meaningless
+Consistency level set to QUORUM.
+
+ autor | contenido
+-------+------------------------------------
+ mario |          primer mensaje con QUORUM
+ mario | escrito con ONE y dos nodos caidos
+
+(2 rows)
