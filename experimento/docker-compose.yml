@@ -1,0 +1,17 @@
+# Clúster local de 3 nodos de ScyllaDB (la base de mensajes que usa Discord) para el experimento de TA-IND-01.
+# Los nodos se levantan de uno en uno: docker compose up -d scylla1, luego scylla2, luego scylla3.
+# --reactor-backend=epoll: en Docker Desktop (WSL2) tres nodos agotan el límite de E/S asíncrona
+# (fs.aio-max-nr = 65536) y nodetool deja de arrancar; con epoll cada nodo usa mucho menos.
+services:
+  scylla1:
+    image: scylladb/scylla:6.2
+    container_name: scylla1
+    command: --seeds=scylla1 --smp 1 --memory 1G --overprovisioned 1 --reactor-backend=epoll
+  scylla2:
+    image: scylladb/scylla:6.2
+    container_name: scylla2
+    command: --seeds=scylla1 --smp 1 --memory 1G --overprovisioned 1 --reactor-backend=epoll
+  scylla3:
+    image: scylladb/scylla:6.2
+    container_name: scylla3
+    command: --seeds=scylla1 --smp 1 --memory 1G --overprovisioned 1 --reactor-backend=epoll

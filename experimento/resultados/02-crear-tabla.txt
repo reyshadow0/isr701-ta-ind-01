@@ -1,0 +1,7 @@
+﻿Consistency level set to QUORUM.
+
+ autor | contenido
+-------+---------------------------
+ mario | primer mensaje con QUORUM
+
+(1 rows)
